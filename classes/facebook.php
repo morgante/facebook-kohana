@@ -92,7 +92,7 @@ class Facebook {
 	/**
 	 * Helper function for getting the active user
 	 **/
-	public static function me( $id )
+	public static function me()
 	{
 		$user = ORM::factory( 'FBUser');
 		
