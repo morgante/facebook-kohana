@@ -9,7 +9,8 @@ class Facebook {
 	private $secret;
 	
 	// Oauth client
-	private $client;	
+	private $client;
+	private $token;	
 	
 	function __construct() {
 		$config = Kohana::$config->load('facebook');
@@ -23,14 +24,18 @@ class Facebook {
 		require_once Kohana::find_file('vendor', 'oauth2/GrantType/IGrantType','php');
 		require_once Kohana::find_file('vendor', 'oauth2/GrantType/AuthorizationCode','php');
 		
-		$client = new OAuth2\Client($this->id, $this->secret);
+		// Set the client
+		$this->client = new OAuth2\Client($this->id, $this->secret);
 		
-		if (!isset($_GET['code']))
+		// Setup token for requests
+		$this->token = Session::instance()->get('fb_token');
+		
+		if( $this->token == null )
 		{
-		    $auth_url = $client->getAuthenticationUrl(Kohana::$config->load('facebook.oauth.authorization'), '');
-		    header('Location: ' . $auth_url);
-		    die('Redirect');
+			$this->login();
 		}
+		
+		$this->client->setAccessToken( $this->token );
 		
 	}
 	
@@ -45,8 +50,29 @@ class Facebook {
 	}
 	
 	public function login()
+	{		
+		if (!isset($_GET['code']))
+		{
+		    $auth_url = $this->client->getAuthenticationUrl(Kohana::$config->load('facebook.oauth.authorization'), Request::current()->url() );
+			// Utils::debug( $auth_url );
+			// exit;
+		    header('Location: ' . $auth_url);
+		    die('Redirect');
+		}
+		else
+		{
+			$params = array('code' => $_GET['code'], 'redirect_uri' => Request::current()->url() );
+			$response = $this->client->getAccessToken(Kohana::$config->load('facebook.oauth.token'), 'authorization_code', $params);
+			parse_str($response['result'], $info);
+			Session::instance()->set('fb_token', $info['access_token']);
+		}
+	}
+	
+	public function me()
 	{
+		$response = $this->client->fetch('https://graph.facebook.com/me');
 		
+		return $response;
 	}
 	
 }
