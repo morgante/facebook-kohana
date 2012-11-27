@@ -96,7 +96,7 @@ class Facebook {
 	{
 		$user = ORM::factory( 'FBUser');
 		
-		Facebook::instance()->fetch( 'me', $user );
+		Facebook::factory()->fetch( 'me', $user );
 		
 		return $user;
 	}
