@@ -68,11 +68,37 @@ class Facebook {
 		}
 	}
 	
-	public function me()
+	public function fetch( $id, $object = null )
 	{
-		$response = $this->client->fetch('https://graph.facebook.com/me');
+		$response = $this->client->fetch('https://graph.facebook.com/'. $id);
+		$result = $response['result'];
 		
-		return $response;
+		foreach( $result as $name => $value )
+		{
+			$object->{$name} = $value;
+		}
+		
+		return $result;
+	}
+	
+	/**
+	 * Helper function for getting the current user
+	 **/
+	public static function user( $id )
+	{
+		return Model_FBUser::fetch( $id );
+	}
+	
+	/**
+	 * Helper function for getting the active user
+	 **/
+	public static function me( $id )
+	{
+		$user = ORM::factory( 'FBUser');
+		
+		Facebook::instance()->fetch( 'me', $user );
+		
+		return $user;
 	}
 	
 }
