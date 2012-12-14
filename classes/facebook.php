@@ -13,6 +13,7 @@ class Facebook {
 	private $token;	
 	
 	function __construct() {
+		
 		$config = Kohana::$config->load('facebook');
 				
 		$this->id = $config['id'];
@@ -28,7 +29,7 @@ class Facebook {
 		$this->client = new OAuth2\Client($this->id, $this->secret);
 		
 		// Setup token for requests
-		$this->token = Session::instance()->get('fb_token');
+		$this->token = Cookie::get('fb_token');
 		
 		if( $this->token == null )
 		{
@@ -64,21 +65,68 @@ class Facebook {
 			$params = array('code' => $_GET['code'], 'redirect_uri' => Request::current()->url() );
 			$response = $this->client->getAccessToken(Kohana::$config->load('facebook.oauth.token'), 'authorization_code', $params);
 			parse_str($response['result'], $info);
-			Session::instance()->set('fb_token', $info['access_token']);
+			$this->token = $info['access_token'];
+			Cookie::set('fb_token', $info['access_token']);
 		}
+	}
+	
+	public function fql( $query )
+	{
+		$response = $this->client->fetch('https://graph.facebook.com/fql', array('q' => $query));
+		$result = $response['result']['data'];
+				
+		return $result;
 	}
 	
 	public function fetch( $id, $object = null )
 	{
+
 		$response = $this->client->fetch('https://graph.facebook.com/'. $id);
 		$result = $response['result'];
 		
-		foreach( $result as $name => $value )
+		if( $object != null )
 		{
-			$object->{$name} = $value;
+			foreach( $result as $name => $value )
+			{
+				$object->{$name} = $value;
+			}
 		}
-		
+						
 		return $result;
+	}
+	
+	/**
+	 * Parse data on signed requests
+	 */
+	public static function signed_request()
+	{
+		if ($_REQUEST && isset( $_REQUEST['signed_request'] ) ) {
+			$request = $_REQUEST['signed_request'];
+			
+			list($encoded_sig, $payload) = explode('.', $request, 2); 
+
+			// decode the data
+			$sig = (base64_decode(strtr($encoded_sig, '-_', '+/')));
+			$data = json_decode(base64_decode(strtr($payload, '-_', '+/')), true);
+			
+			// make sure it's the proper algorithm
+			if (strtoupper($data['algorithm']) !== 'HMAC-SHA256') {
+				error_log('Unknown algorithm. Expected HMAC-SHA256');
+				return null;
+			}
+
+			// Adding the verification of the signed_request below
+			$expected_sig = hash_hmac('sha256', $payload, Facebook::factory()->secret, $raw = true);
+			if ($sig !== $expected_sig) {
+				error_log('Bad Signed JSON signature!');
+				return null;
+			}
+			
+			return $data;
+			
+		} else {
+			return false;
+		}
 	}
 	
 	/**
@@ -94,11 +142,26 @@ class Facebook {
 	 **/
 	public static function me()
 	{
-		$user = ORM::factory( 'FBUser');
+		// if given a request, fetch existing user from system
+		if( $request = self::signed_request() )
+		{
+			$user = ORM::factory( 'FBUser', $request['user_id'] );
+		}
+		else
+		{
+			$user = ORM::factory( 'FBUser');
+		}
 		
+		// if user exists in db, return immediately
+		if( $user->id != null )
+		{
+			return $user;
+		}
+				
 		Facebook::factory()->fetch( 'me', $user );
 		
 		return $user;
 	}
+
 	
 }
